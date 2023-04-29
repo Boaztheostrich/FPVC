@@ -1,0 +1,225 @@
+#include <ESP8266WiFi.h>
+#include <WiFiClient.h>
+#include <ESP8266WebServer.h>
+
+
+// it seems like using pins other then the one that are marked d (d1,d2, etc...) is a VERY bad idea, you basically only can use 6 digital pins
+
+
+//output pins
+const int output0 = 12; // air valve | Red
+const int output1 = 13; // D7 back coil | Silver
+const int output2 =  15; // D8 front coil | Black
+
+//digital input pins
+const int redButton = 5; //d1 Red
+const int blackButton = 14; //d5 Black
+const int silverSwitch = 4; //d2 Silver
+
+//analog input pin
+const int pressurePin = A0;
+
+
+//wifi stuff
+const char* ssid = "ESP8266AP";
+const char* password = "password";
+
+
+//web control (this can prob be simplified down to one)
+bool controlledByWeb_output0 = false;
+bool controlledByWeb_output1 = false;
+bool controlledByWeb_output2 = false;
+
+
+ESP8266WebServer server(80);
+
+void setup() {
+  delay(2000);
+  Serial.begin(115200);
+  Serial.println("");
+
+  // Set up the ESP8266 as a soft access point
+  WiFi.mode(WIFI_AP);
+  WiFi.softAP(ssid, password);
+  IPAddress IP = WiFi.softAPIP();
+  Serial.println("AP IP address: ");
+  Serial.println(IP);
+
+  pinMode(output0, OUTPUT);
+  pinMode(output1, OUTPUT);
+  pinMode(output2, OUTPUT);
+
+
+  // Set up the web server to serve a webpage
+  server.on("/", []() {
+    String html = "<html><head><style>h1 {text-align: center;}</style><script>";
+    html += "</script></head>";
+    html += "<body><h1>Control Pins</h1>";
+    html += "<button id='redButton' style='display: block; margin: 0 auto;'>Toggle Output 0</button>";
+    html += "<button id='blackButton' style='display: block; margin: 0 auto;'>Toggle Output 1</button>";
+    html += "<button id='silverSwitch' style='display: block; margin: 0 auto;'>Toggle Output 2</button>";
+
+    // Add the toggle switch and label
+    html += "<p style='text-align: center;'>";
+    html += "<input type='checkbox' id='web-control-toggle' name='web-control-toggle'>";
+    html += "<label for='web-control-toggle'>Enable Web Control</label>";
+    html += "</p>";
+
+    html += "</body></html>";
+
+    html += "<script>";
+
+    html += "var toggleButton = document.getElementById('redButton');";
+    html += "toggleButton.addEventListener('click', function() {";
+    html += "  var xhttp = new XMLHttpRequest();";
+    html += "  xhttp.onreadystatechange = function() {";
+    html += "    if (this.readyState == 4 && this.status == 200) {";
+    html += "      toggleButton.innerHTML = this.responseText == '1' ? 'Turn off Output 0' : 'Turn on Output 0';";
+    html += "    }";
+    html += "  };";
+    html += "  xhttp.open('GET', '/toggle', true);";
+    html += "  xhttp.send();";
+    html += "});";
+
+    html += "var toggleButton1 = document.getElementById('blackButton');";
+    html += "toggleButton1.addEventListener('click', function() {";
+    html += "  var xhttp = new XMLHttpRequest();";
+    html += "  xhttp.onreadystatechange = function() {";
+    html += "    if (this.readyState == 4 && this.status == 200) {";
+    html += "      toggleButton1.innerHTML = this.responseText == '1' ? 'Turn off Output 1' : 'Turn on Output 1';";
+    html += "    }";
+    html += "  };";
+    html += "  xhttp.open('GET', '/toggle1', true);";
+    html += "  xhttp.send();";
+    html += "});";
+
+    html += "var toggleButtonPin5 = document.getElementById('silverSwitch');";
+    html += "toggleButtonPin5.addEventListener('click', function() {";
+    html += "  var xhttp = new XMLHttpRequest();";
+    html += "  xhttp.onreadystatechange = function() {";
+    html += "    if (this.readyState == 4 && this.status == 200) {";
+    html += "      toggleButtonPin5.innerHTML = this.responseText == '1' ? 'Turn off Output 2' : 'Turn on Output 2';";
+    html += "    }";
+    html += "  };";
+    html += "  xhttp.open('GET', '/togglepin5', true);";
+    html += "  xhttp.send();";
+    html += "});";
+
+    html += "var webControlToggle = document.getElementById('web-control-toggle');";
+    html += "var controlledByWeb = false;";
+    html += "webControlToggle.addEventListener('change', function() {";
+    html += "  controlledByWeb_output0 = controlledByWeb_output1 = controlledByWeb_output2 = this.checked;";
+    html += "  var xhttp = new XMLHttpRequest();";
+    html += "  xhttp.open('GET', '/setControlledByWeb?controlledByWeb=' + (controlledByWeb_output0 ? '1' : '0'), true);";
+    html += "  xhttp.send();";
+    html += "});";
+
+    html += "</script>";
+
+    server.send(200, "text/html", html);
+  });
+
+  // Add the new route to handle the controlledByWeb flag
+  server.on("/setControlledByWeb", []() {
+    int webControl = server.arg("controlledByWeb").toInt();
+    controlledByWeb_output0 = webControl;
+    controlledByWeb_output1 = webControl;
+    controlledByWeb_output2 = webControl;
+    server.send(200, "text/plain", "OK");
+  });
+
+  server.on("/toggle", []() {
+    int pinState = digitalRead(output0);
+    digitalWrite(output0, !pinState);
+    Serial.println("db1");
+    server.send(200, "text/plain", String(!pinState));
+  });
+
+  server.on("/toggle1", []() {
+    int pinState1 = digitalRead(output1);
+    digitalWrite(output1, !pinState1);
+    Serial.println("db2");
+
+    server.send(200, "text/plain", String(!pinState1));
+  });
+
+  server.on("/togglepin5", []() {
+    int pinStatePin5 = digitalRead(output2);
+    digitalWrite(output2, !pinStatePin5);
+    Serial.println("db3");
+
+    server.send(200, "text/plain", String(!pinStatePin5));
+  });
+
+  server.begin();
+  pinMode(LED_BUILTIN, OUTPUT);
+  //pinMode(ledPin, OUTPUT);
+  pinMode(redButton, INPUT);
+  pinMode(blackButton, INPUT);
+  pinMode(silverSwitch, INPUT);
+  Serial.begin(9600);
+}
+
+void loop() {
+  server.handleClient();
+  // Read the state of each button
+  int button1State = digitalRead(redButton);
+  int button2State = digitalRead(blackButton);
+  int button3State = digitalRead(silverSwitch);
+
+  // Check which buttons are pressed and set the output pins only if controlledByWeb flag is false
+  if (!controlledByWeb_output0 && !controlledByWeb_output1 && !controlledByWeb_output2 && button1State == HIGH && button2State == HIGH && button3State == HIGH) {
+    digitalWrite(output0, HIGH);
+    digitalWrite(output1, HIGH);
+    digitalWrite(output2, HIGH);
+    Serial.println("All buttons pressed");
+    
+  } else if (!controlledByWeb_output0 && !controlledByWeb_output1 && button1State == HIGH && button2State == HIGH) {
+    digitalWrite(output0, HIGH);
+    digitalWrite(output1, HIGH);
+    digitalWrite(output2, LOW);
+    Serial.println("Button 1 and 2 pressed");
+    
+  } else if (!controlledByWeb_output0 && !controlledByWeb_output2 && button1State == HIGH && button3State == HIGH) {
+    digitalWrite(output0, HIGH);
+    digitalWrite(output1, LOW);
+    digitalWrite(output2, HIGH);
+    Serial.println("Button 1 and 3 pressed");
+    
+  } else if (!controlledByWeb_output1 && !controlledByWeb_output2 && button2State == HIGH && button3State == HIGH) {
+    digitalWrite(output0, LOW);
+    digitalWrite(output1, HIGH);
+    digitalWrite(output2, HIGH);
+    Serial.println("Button 2 and 3 pressed");
+    
+  } else if (!controlledByWeb_output0 && button1State == HIGH) {
+    digitalWrite(output0, HIGH);
+    digitalWrite(output1, LOW);
+    digitalWrite(output2, LOW);
+    Serial.println("Button 1 pressed");
+    
+  } else if (!controlledByWeb_output1 && button2State == HIGH) {
+    digitalWrite(output0, LOW);
+    digitalWrite(output1, HIGH);
+    digitalWrite(output2, LOW);
+    Serial.println("Button 2 pressed");
+    
+  } else if (!controlledByWeb_output2 && button3State == HIGH) {
+    digitalWrite(output0, LOW);
+    digitalWrite(output1, LOW);
+    digitalWrite(output2, HIGH);
+    Serial.println("Button 3 pressed");
+    
+  } else {
+    if (!controlledByWeb_output0) {
+      digitalWrite(output0, LOW);
+    }
+    if (!controlledByWeb_output1) {
+      digitalWrite(output1, LOW);
+    }
+    if (!controlledByWeb_output2) {
+      digitalWrite(output2, LOW);
+    }
+  }
+  delay(100);
+}
